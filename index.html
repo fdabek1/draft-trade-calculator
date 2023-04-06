@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Draft Pick Trade Calculator</title>
 </head>
 <body>
 
@@ -20,7 +20,7 @@
         </label>
 
         <label>
-            <select v-model="selected.team_pick">
+            <select v-model="selected.team_pick" @change="changeTeamPick">
                 <option :value="null">Pick</option>
                 <template v-for="pick in picks">
                     <option :value="pick.num" v-if="selected.team !== null && pick.team === selected.team">
@@ -174,6 +174,10 @@
             });
         },
         methods: {
+            changeTeamPick() {
+                this.selected.overall_pick = this.selected.team_pick;
+                this.computeTrades();
+            },
             changeChart() {
                 this.buildValueMap();
                 this.computeTrades();

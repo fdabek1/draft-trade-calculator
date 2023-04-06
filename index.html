@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+<script src="https://unpkg.com/vue@3"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.3.5/axios.min.js"></script>
+
+<div id="app">
+    <h1>Trade Away Pick</h1>
+    <div>
+        <label>
+            <select v-model="selected.team">
+                <option :value="null">Team</option>
+                <option v-for="team in teams" :value="team.name">{{ team.name }}</option>
+            </select>
+        </label>
+
+        <label>
+            <select v-model="selected.team_pick">
+                <option :value="null">Pick</option>
+                <template v-for="pick in picks">
+                    <option :value="pick.num" v-if="selected.team !== null && pick.team === selected.team">
+                        {{ makePickPretty(pick.num) }}
+                    </option>
+                </template>
+            </select>
+        </label>
+
+        OR
+
+        <label>
+            <input type="number" placeholder="Pick #" min="1" max="259"
+                   v-model="selected.overall_pick" @change="changeOverall"/>
+        </label>
+        <br>
+        <br>
+
+        <button @click="computeTrades">Trade Pick</button>
+    </div>
+
+
+    <div>
+        Value Chart:
+        <label>
+            <select v-model="selected.chart" @change="changeChart">
+                <option v-for="type in chart_types" :value="type">{{ type }}</option>
+            </select>
+        </label>
+    </div>
+
+    <div>
+        Threshold:
+        <label>
+            <input type="number" placeholder="Threshold for Trade" min="0" v-model="threshold" @change="computeTrades">
+        </label>
+    </div>
+
+<!--    <div>-->
+<!--        Calculate Extra?-->
+<!--        <label>-->
+<!--            <input type="checkbox" v-model="selected.calcExtra" @change="computeTrades">-->
+<!--        </label>-->
+<!--    </div>-->
+
+
+    <div>
+        Filter By Team:
+        <label>
+            <select v-model="selected.show_team">
+                <option :value="null">All Teams</option>
+                <option v-for="team in teams" :value="team.name">{{ team.name }}</option>
+            </select>
+        </label>
+    </div>
+
+    <div>
+        Current Pick Value: {{ currentValue }}
+    </div>
+    <table border="1" style="width: 50%;">
+        <tr>
+            <th>Team</th>
+            <th>Value</th>
+            <th>Picks</th>
+            <th>Extra</th>
+        </tr>
+        <template
+                v-for="(trade, i) in trades.filter(t => (selected.show_team === null || t.team === selected.show_team))">
+            <tr v-if="i < 200">
+                <td>{{ trade.team }}</td>
+                <td>{{ trade.value }}
+                    <span v-if="trade.valueDiff > 0" style="background-color: lightgreen;">
+                        (+{{ trade.valueDiff }})
+                    </span>
+                    <span v-else-if="trade.valueDiff < 0" style="background-color: rgba(208,13,13,0.4);">
+                        ({{ trade.valueDiff }})
+                    </span>
+                    <span v-else style="background-color: rgba(128,128,128,0.42);">({{ trade.valueDiff }})</span>
+                </td>
+                <td>
+                    <ul>
+                        <li v-for="pick in trade.picks">{{ makePickPretty(pick.num) }} ({{ pick.value }})</li>
+                    </ul>
+                </td>
+                <td>
+                    <ul>
+                        <li v-for="pick in trade.extra">{{ makePickPretty(pick.num) }} ({{ pick.value }})</li>
+                    </ul>
+                </td>
+            </tr>
+        </template>
+    </table>
+</div>
+
+<script>
+    Vue.createApp({
+        data() {
+            return {
+                picks: null,
+                charts: null,
+                chart_types: null,
+                teams: [],
+                selected: {
+                    chart: "Jimmy Johnson",
+                    show_team: null,
+                    team: null,
+                    team_pick: null,
+                    overall_pick: null,
+                    calcExtra: false,
+                },
+                valueMap: {},
+                threshold: 200,
+                currentValue: 0,
+                trades: [],
+                rounds: {
+                    1: 1,
+                    2: 32,
+                    3: 64,
+                    4: 103,
+                    5: 136,
+                    6: 178,
+                    7: 218,
+                },
+            }
+        },
+        mounted() {
+            axios({
+                url: 'charts.csv',
+                method: 'GET',
+                responseType: 'text',
+            }).then((response) => {
+                let output = this.parseCSV(response.data);
+                this.charts = output.values;
+                this.chart_types = output.headers.slice(1,);
+                this.buildValueMap();
+            });
+
+            axios({
+                url: 'picks.csv',
+                method: 'GET',
+                responseType: 'text',
+            }).then((response) => {
+                this.picks = this.parseCSV(response.data).values;
+                let teamNames = [...new Set(this.picks.map(row => row["team"]))].sort();
+                for (let name of teamNames) {
+                    this.teams.push({
+                        name: name,
+                        picks: this.picks.filter(row => row.team === name).map(row => row.num),
+                    })
+                }
+            });
+        },
+        methods: {
+            changeChart() {
+                this.buildValueMap();
+                this.computeTrades();
+            },
+            changeOverall() {
+                //Update team & pick
+                let pick = this.picks.find(row => row.num === this.selected.overall_pick);
+                this.selected.team = pick.team;
+                this.selected.team_pick = pick.num;
+                this.computeTrades();
+            },
+            clearSelected() {
+                this.selected.team = null;
+                this.selected.team_pick = null;
+                this.selected.overall_pick = null;
+            },
+            sumArray(values) { //Source: https://stackoverflow.com/a/16751601
+                return values.reduce((partialSum, a) => partialSum + a, 0);
+            },
+            computeTrades() {
+                console.log("Calculating trades");
+                //TODO: Build this logic
+                this.currentValue = this.valueMap[this.selected.overall_pick];
+                let extras = this.teams.find(row => row.name === this.selected.team).picks;
+                // let extraValues = extras.map()
+
+                let extraCombos = [];
+                for (let extra of this.combinations(extras)) {
+                    extra = extra.map(p => {
+                        return {num: p, value: this.valueMap[p]}
+                    });
+                    let extraValue = this.sumArray(extra.map(p => p.value));
+                    extraCombos.push({
+                        combo: extra,
+                        value: extraValue,
+                    });
+                }
+
+                let trades = [];
+                for (let team of this.teams) {
+                    if (team.name === this.selected.team)
+                        continue;
+
+                    for (let combo of this.combinations(team.picks)) {
+                        combo = combo.map(p => {
+                            return {num: p, value: this.valueMap[p]}
+                        });
+                        let totalValue = this.sumArray(combo.map(p => p.value));
+
+                        for (let extra of extraCombos) {
+                            if (!this.selected.calcExtra && extra.combo.length > 0)
+                                continue;
+
+                            if (Math.abs(totalValue - (this.currentValue + extra.value)) > this.threshold)
+                                continue;
+
+                            trades.push({
+                                team: team.name,
+                                value: totalValue.toFixed(2),
+                                valueDiff: (totalValue - (this.currentValue + extra.value)).toFixed(2),
+                                picks: combo,
+                                extra: extra.combo,
+                            })
+                        }
+                    }
+
+                    // trades.push({
+                    //     team: team.name,
+                    //     value: value,
+                    //     // valueDiff:
+                    //     // picks:
+                    // })
+                    // break;
+
+
+                }
+
+                this.trades.splice(0, this.trades.length);
+                trades.sort((a, b) => Math.abs(0 - a.valueDiff) - Math.abs(0 - b.valueDiff));
+                for (let trade of trades) {
+                    this.trades.push(trade);
+                }
+                // this.trades = trades;
+                // this.trades.push({
+                //     team: "BAL",
+                //     value: 100,
+                //     valueDiff: 150,
+                //     picks: [
+                //         {
+                //             num: 1,
+                //             value: 100,
+                //         },
+                //         {
+                //             num: 2,
+                //             value: 100,
+                //         },
+                //     ],
+                //     extra: [],
+                // })
+            },
+            combinations(array) { //Source: https://stackoverflow.com/a/42531964
+                return new Array(1 << array.length).fill().map(
+                    (e1, i) => array.filter((e2, j) => i & 1 << j));
+            },
+            combinationsAlt(a, min) { //Source: https://stackoverflow.com/a/5752056
+                let fn = function (n, src, got, all) {
+                    if (n === 0) {
+                        if (got.length > 0) {
+                            all[all.length] = got;
+                        }
+                        return;
+                    }
+                    for (let j = 0; j < src.length; j++) {
+                        fn(n - 1, src.slice(j + 1), got.concat([src[j]]), all);
+                    }
+                    return;
+                }
+                let all = [];
+                for (let i = min; i < a.length; i++) {
+                    fn(i, a, [], all);
+                }
+                all.push(a);
+                return all;
+            },
+            makePickPretty(pick) {
+                let pickRound = null;
+                for (let [round, firstPick] of Object.entries(this.rounds)) {
+                    if (pick >= firstPick) {
+                        pickRound = round;
+                    }
+                }
+                return pick + " (Round " + pickRound + ")";
+            },
+            buildValueMap() {
+                for (let row of this.charts) {
+                    this.valueMap[row["Pick #"]] = row[this.selected.chart];
+                }
+            },
+            parseCSV(text) {
+                let results = [];
+                let headers = null;
+                for (let line of text.split("\n")) {
+                    if (headers == null) {
+                        headers = line.split(",");
+                        continue;
+                    }
+
+                    if (line === "")
+                        continue;
+
+                    let row = {};
+                    for (let [i, value] of line.split(",").entries()) {
+                        if (this.checkFloat(value))
+                            row[headers[i]] = parseFloat(value);
+                        else
+                            row[headers[i]] = value;
+                    }
+
+                    results.push(row);
+                }
+
+                return {
+                    headers: headers,
+                    values: results,
+                };
+            },
+            checkFloat(value) {
+                let parsed = Number.parseFloat(value);
+                return !Number.isNaN(parsed);
+            },
+        }
+    }).mount('#app')
+</script>
+
+</body>
+</html>

@@ -53,18 +53,43 @@
     </div>
 
     <div>
+        Trade Movement:
+        <label>
+            <select v-model="selected.tradeMovement" @change="computeTrades">
+                <option :value="null">Up & Down</option>
+                <option value="up">Up</option>
+                <option value="down">Down</option>
+            </select>
+        </label>
+    </div>
+
+    <div>
         Threshold:
         <label>
             <input type="number" placeholder="Threshold for Trade" min="0" v-model="threshold" @change="computeTrades">
         </label>
     </div>
 
-<!--    <div>-->
-<!--        Calculate Extra?-->
-<!--        <label>-->
-<!--            <input type="checkbox" v-model="selected.calcExtra" @change="computeTrades">-->
-<!--        </label>-->
-<!--    </div>-->
+    <div>
+        Max Self Picks:
+        <label>
+            <input type="number" placeholder="No Maximum" v-model="selected.maxSelfPicks" @change="computeTrades">
+        </label>
+    </div>
+
+    <div>
+        Max Partner Picks:
+        <label>
+            <input type="number" placeholder="No Maximum" v-model="selected.maxPartnerPicks" @change="computeTrades">
+        </label>
+    </div>
+
+    <div>
+        Calculate Extra?
+        <label>
+            <input type="checkbox" v-model="selected.calcExtra" @change="computeTrades">
+        </label>
+    </div>
 
 
     <div>
@@ -125,6 +150,9 @@
                 teams: [],
                 selected: {
                     chart: "Jimmy Johnson",
+                    maxPartnerPicks: 4,
+                    maxSelfPicks: 4,
+                    tradeMovement: null,
                     show_team: null,
                     team: null,
                     team_pick: null,
@@ -222,13 +250,31 @@
                         continue;
 
                     for (let combo of this.combinations(team.picks)) {
+                        if(combo.length === 0)
+                            continue;
+
+                        if(this.selected.maxPartnerPicks !== null && combo.length > this.selected.maxPartnerPicks)
+                            continue;
+
                         combo = combo.map(p => {
                             return {num: p, value: this.valueMap[p]}
                         });
+                        if(this.selected.tradeMovement !== null) {
+                            const maxValue = Math.max(...combo.map(p => p.value));
+                            if(this.selected.tradeMovement === "up" && maxValue < this.currentValue)
+                                continue;
+
+                            if(this.selected.tradeMovement === "down" && maxValue > this.currentValue)
+                                continue;
+                        }
+
                         let totalValue = this.sumArray(combo.map(p => p.value));
 
                         for (let extra of extraCombos) {
                             if (!this.selected.calcExtra && extra.combo.length > 0)
+                                continue;
+
+                            if(this.selected.maxSelfPicks !== null && (extra.length + 1) > this.selected.maxSelfPicks)
                                 continue;
 
                             if (Math.abs(totalValue - (this.currentValue + extra.value)) > this.threshold)
@@ -243,6 +289,7 @@
                             })
                         }
                     }
+
 
                     // trades.push({
                     //     team: team.name,

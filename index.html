@@ -274,7 +274,7 @@
                             if (!this.selected.calcExtra && extra.combo.length > 0)
                                 continue;
 
-                            if(this.selected.maxSelfPicks !== null && (extra.length + 1) > this.selected.maxSelfPicks)
+                            if(this.selected.maxSelfPicks !== null && (extra.combo.length + 1) > this.selected.maxSelfPicks)
                                 continue;
 
                             if (Math.abs(totalValue - (this.currentValue + extra.value)) > this.threshold)
